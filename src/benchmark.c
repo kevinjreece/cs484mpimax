@@ -3,9 +3,10 @@
 #include <sys/time.h>
 #include <mpi.h>
 #include <math.h>
+#include <sys/unistd.h>
 
-#define VECSIZE 8
-#define ITERATIONS 10
+#define VECSIZE 1
+#define ITERATIONS 100
 
 typedef struct {
     double val;
@@ -32,7 +33,7 @@ void mergeMaxVectors(max_cell max[], max_cell temp[]) {
 }
 
 // Broadcast value to all nodes
-float broadcastMaxVector(max_cell* max, int rank, int num_dim) {
+void broadcastMaxVector(max_cell* max, int rank, int num_dim) {
     int not_participating = pow(2.0, num_dim-1) - 1;
     int bit_mask = pow(2.0, num_dim - 1);
     int cur_dim;
@@ -98,11 +99,13 @@ void reduceMaxVector(max_cell* max, int rank, int num_dim) {
     return;
 }
 
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
         int iproc, nproc, i, iter;
         char host[255], message[55];
         setvbuf(stdout, NULL, _IONBF, 0);
+
+        // printf("Starting\n");
 
         MPI_Init(&argc, &argv);
         MPI_Comm_size(MPI_COMM_WORLD, &nproc);
@@ -110,8 +113,8 @@ main(int argc, char *argv[])
 
         int num_dim = (int) log2(nproc);
 
-        gethostname(host,253);
-        printf("I am proc %d of %d running on %s\n", iproc, nproc,host);
+        // gethostname(host,253);
+        // printf("I am proc %d of %d running on %s\n", iproc, nproc,host);
         // each process has an array of VECSIZE double: ain[VECSIZE]
         double init_vals[VECSIZE];
         
@@ -120,37 +123,43 @@ main(int argc, char *argv[])
         int my_id, root = 0;
 
         MPI_Comm_rank(MPI_COMM_WORLD, &my_id);
+
+
+        // if (my_id == 0) {
+        //     printf("Running benchmark.c on %d machines with arrays of size %d a total of %d times\n", nproc, VECSIZE, ITERATIONS);
+        // }
+
         // Start time here
         srand(my_id+5);
         double start = When();
         for(iter = 0; iter < ITERATIONS; iter++) {
             for(i = 0; i < VECSIZE; i++) {
-                double num = rand() % 100;
+                double num = rand();
                 init_vals[i] = num;
                 max[i].val = num;
                 max[i].rank = my_id;
-                printf("init proc %d [%d]=%f\n", my_id, i, init_vals[i]);
+                // printf("init proc %d [%d]=%f\n", my_id, i, init_vals[i]);
             }
             reduceMaxVector(max, my_id, num_dim);
             // At this point, the answer resides on process root
-            if (my_id == root) {
-                /* read ranks out */
-                for (i=0; i<VECSIZE; ++i) {
-                    printf("root: max[%d] = %f from %d\n", i, max[i].val, max[i].rank);
-                    // aout[i] = out[i].val;
-                    // ind[i] = out[i].rank;
-                }
-            }
+            // if (my_id == root) {
+            //     /* read ranks out */
+            //     for (i=0; i<VECSIZE; ++i) {
+            //         printf("root: max[%d] = %f from %d\n", i, max[i].val, max[i].rank);
+            //         // aout[i] = out[i].val;
+            //         // ind[i] = out[i].rank;
+            //     }
+            // }
             // Now broadcast this max vector to everyone else.
             broadcastMaxVector(max, my_id, num_dim);
-            for(i = 0; i < VECSIZE; i++) {
-                printf("final proc %d [%d] = %f from %d\n", my_id, i, max[i].val, max[i].rank);
-            }
+            // for(i = 0; i < VECSIZE; i++) {
+            //     printf("final proc %d [%d] = %f from %d\n", my_id, i, max[i].val, max[i].rank);
+            // }
         }
         MPI_Finalize();
         double end = When();
         if(my_id == root) {
-            printf("Time %f\n",end-start);
+            printf("%f",end-start);
         }
 }
 
